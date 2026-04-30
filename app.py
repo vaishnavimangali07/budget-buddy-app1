@@ -2,6 +2,16 @@ import streamlit as st
 import json
 import matplotlib.pyplot as plt
 import datetime
+import hashlib
+
+# ✅ TEST LINE (for deployment check)
+st.write("App updated 🚀")
+
+# ======================================================
+# PASSWORD HASH FUNCTION
+# ======================================================
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
 
 # ======================================================
 # PAGE CONFIG
@@ -9,54 +19,32 @@ import datetime
 st.set_page_config(page_title="Budget Buddy", layout="centered")
 
 # ======================================================
-# 🌈 UI STYLING (APP STYLE)
+# 🎨 UI
 # ======================================================
 st.markdown("""
 <style>
-
-.main {
-    background-color: #f4f6fb;
+body {background-color: #eef2ff;}
+.block-container {max-width: 420px; margin: auto;}
+#MainMenu, footer, header {visibility: hidden;}
+.header {
+    background: linear-gradient(135deg, #6d28d9, #2563eb);
+    padding: 20px; border-radius: 20px; color: white;
+    text-align: center; margin-bottom: 15px;
 }
-
-.block-container {
-    max-width: 420px;
-    padding-top: 1rem;
-    margin: auto;
+.card {
+    background: white; padding: 15px; border-radius: 18px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    margin-bottom: 15px;
 }
-
-#MainMenu {visibility: hidden;}
-footer {visibility: hidden;}
-header {visibility: hidden;}
-
-div[data-testid="stMetric"] {
-    background-color: white;
-    border-radius: 15px;
-    padding: 12px;
-    box-shadow: 0 6px 15px rgba(0,0,0,0.08);
-}
-
 .stButton button {
-    background-color: #2563eb;
-    color: white;
-    border-radius: 12px;
-    width: 100%;
-    padding: 8px;
+    background: linear-gradient(135deg, #2563eb, #4f46e5);
+    color: white; border-radius: 12px; width: 100%;
 }
-
-[data-testid="stSidebar"] {
-    background-color: #ffffff;
-}
-
-h1, h2, h3 {
-    text-align: center;
-    color: #1d4ed8;
-}
-
 </style>
 """, unsafe_allow_html=True)
 
 # ======================================================
-# 👤 AUTH SYSTEM (LOGIN + SIGNUP)
+# AUTH
 # ======================================================
 USERS_FILE = "users.json"
 
@@ -73,56 +61,68 @@ def save_users(users):
 
 users = load_users()
 
+# ======================================================
 # SESSION STATE
+# ======================================================
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = None
 
+if "accounts" not in st.session_state:
+    st.session_state.accounts = ["Cash", "Wallet"]
+
+if "account_balances" not in st.session_state:
+    st.session_state.account_balances = {}
+
+if "show_account_form" not in st.session_state:
+    st.session_state.show_account_form = False
+
 # ======================================================
-# AUTH PAGE
+# BANK LIST
+# ======================================================
+BANK_LIST = [
+    "SBI","HDFC","ICICI","Axis Bank",
+    "Kotak Bank","Canara Bank",
+    "Union Bank","Bank of Baroda",
+    "Punjab National Bank",
+    "IndusInd Bank",
+    "Paytm Wallet","PhonePe Wallet","Google Pay (GPay)"
+]
+
+# ======================================================
+# LOGIN / SIGNUP
 # ======================================================
 if not st.session_state.logged_in:
 
     st.title("💰 Budget Buddy")
-
     option = st.radio("Select Option", ["Login", "Create Account"])
 
-    # -------- LOGIN --------
     if option == "Login":
-        st.subheader("🔐 Login")
-
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        u = st.text_input("Username")
+        p = st.text_input("Password", type="password")
 
         if st.button("Login"):
-            if username in users and users[username] == password:
+            if u in users and users[u] == hash_password(p):
                 st.session_state.logged_in = True
-                st.session_state.user = username
+                st.session_state.user = u
                 st.rerun()
             else:
                 st.error("Invalid credentials")
 
-    # -------- SIGNUP --------
     else:
-        st.subheader("🆕 Create Account")
-
-        new_user = st.text_input("New Username")
-        new_pass = st.text_input("New Password", type="password")
+        u = st.text_input("New Username")
+        p = st.text_input("New Password", type="password")
 
         if st.button("Sign Up"):
-            if new_user in users:
-                st.warning("User already exists!")
-            elif new_user == "" or new_pass == "":
-                st.warning("Please fill all fields")
+            if u in users:
+                st.warning("User exists")
+            elif u == "" or p == "":
+                st.warning("Fill all fields")
             else:
-                users[new_user] = new_pass
+                users[u] = hash_password(p)
                 save_users(users)
-
-                # AUTO LOGIN
                 st.session_state.logged_in = True
-                st.session_state.user = new_user
-
-                st.success("Account created! 🎉")
+                st.session_state.user = u
                 st.rerun()
 
     st.stop()
@@ -130,17 +130,16 @@ if not st.session_state.logged_in:
 # ======================================================
 # SIDEBAR
 # ======================================================
-st.sidebar.title(f"💰 {st.session_state.user}")
+st.sidebar.title(st.session_state.user)
 
 if st.sidebar.button("🚪 Logout"):
     st.session_state.logged_in = False
-    st.session_state.user = None
     st.rerun()
 
 page = st.sidebar.selectbox("Navigate", ["Dashboard", "Add Transaction"])
 
 # ======================================================
-# USER DATA FILE
+# DATA
 # ======================================================
 DATA_FILE = f"data_{st.session_state.user}.json"
 
@@ -162,115 +161,85 @@ data = load_data()
 # ======================================================
 if page == "Dashboard":
 
-    st.title("💰 Budget Buddy")
+    st.markdown(f"""
+    <div class="header">
+        <h2>💰 Budget Buddy</h2>
+        <p>Welcome, {st.session_state.user}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-    months = ["All","January","February","March","April","May","June",
-              "July","August","September","October","November","December"]
+    if st.button("🏦 Add Account"):
+        st.session_state.show_account_form = True
 
-    selected_month = st.selectbox("📅 Select Month", months)
+    if st.session_state.show_account_form:
+        st.subheader("➕ Add Account")
 
-    filtered_data = data
+        bank = st.selectbox("Select Bank", BANK_LIST)
+        balance = st.number_input("Opening Balance", min_value=0.0)
 
-    if selected_month != "All":
-        filtered_data = [
-            d for d in data
-            if "date" in d and
-            datetime.datetime.strptime(d["date"], "%Y-%m-%d").strftime("%B") == selected_month
-        ]
-
-    if filtered_data:
-
-        income = sum(d["amount"] for d in filtered_data if d["type"] == "Income")
-        expense = sum(d["amount"] for d in filtered_data if d["type"] == "Expense")
-        balance = income - expense
-
-        expense_data = [d for d in filtered_data if d["type"] == "Expense"]
-
-        if expense > income:
-            st.error(f"🚨 Overspending by ₹{expense - income}")
-        elif expense == income:
-            st.warning("⚠️ Income fully spent!")
-        else:
-            st.success(f"👍 Savings ₹{income - expense}")
-
-        if income > 0 and expense >= 0.7 * income:
-            st.warning(f"⚠️ You used {round((expense/income)*100)}% of income!")
-
-        st.subheader("📅 Daily Spending Analysis")
-
-        daily = {}
-        for d in expense_data:
-            daily[d["date"]] = daily.get(d["date"], 0) + d["amount"]
-
-        if daily:
-            fig, ax = plt.subplots()
-            ax.plot(list(daily.keys()), list(daily.values()), marker="o")
-            plt.xticks(rotation=45)
-            st.pyplot(fig)
-
-        st.subheader("🧠 Smart Insights")
-
-        if expense_data:
-            avg = sum(d["amount"] for d in expense_data) / len(expense_data)
-            max_spend = max(daily.values()) if daily else 0
-
-            if expense > income:
-                st.error("🚨 Overspending detected!")
-            elif expense > 0.8 * income:
-                st.warning("⚠️ High spending!")
-            elif avg > 500:
-                st.info("💡 High daily spending")
-            else:
-                st.success("👍 Healthy spending")
-
-            st.write(f"Avg Spend: ₹{avg:.2f}")
-            st.write(f"Highest Day: ₹{max_spend}")
-
-        col1, col2, col3 = st.columns(3)
-        col1.metric("💵 Income", income)
-        col2.metric("💸 Expense", expense)
-        col3.metric("💰 Balance", balance)
-
-        st.divider()
-
-        st.subheader("📋 Transactions")
-
-        for i, item in enumerate(filtered_data):
-            col1, col2, col3, col4 = st.columns(4)
-
-            col1.write(item["type"])
-            col2.write(item["category"])
-            col3.write(item["amount"])
-
-            if col4.button("🗑️", key=i):
-                data.remove(item)
-                save_data(data)
+        if st.button("Save Account"):
+            if bank not in st.session_state.accounts:
+                st.session_state.accounts.append(bank)
+                st.session_state.account_balances[bank] = balance
+                st.success(f"{bank} added with ₹{balance}")
+                st.session_state.show_account_form = False
                 st.rerun()
+            else:
+                st.warning("Already exists")
 
-        st.divider()
+    if data:
 
-        st.subheader("📊 Expense Distribution")
+        income = sum(d["amount"] for d in data if d["type"]=="Income")
+        expense = sum(d["amount"] for d in data if d["type"]=="Expense")
 
-        if expense_data:
-            cat_sum = {}
-            for d in expense_data:
-                cat_sum[d["category"]] = cat_sum.get(d["category"], 0) + d["amount"]
+        accounts = st.session_state.account_balances.copy()
 
-            fig, ax = plt.subplots()
-            ax.pie(cat_sum.values(), labels=cat_sum.keys(), autopct="%1.1f%%")
+        for d in data:
+            acc = d.get("account","Cash")
+
+            if acc not in accounts:
+                accounts[acc] = 0
+
+            if d["type"]=="Income":
+                accounts[acc] += d["amount"]
+            else:
+                accounts[acc] -= d["amount"]
+
+        balance = sum(accounts.values())
+
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        c1,c2,c3 = st.columns(3)
+        c1.metric("Income", income)
+        c2.metric("Expense", expense)
+        c3.metric("Balance", balance)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🏦 Accounts")
+        for a,b in accounts.items():
+            st.write(f"{a}: ₹{b}")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        exp_data=[d for d in data if d["type"]=="Expense"]
+
+        if exp_data:
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            cat={}
+            for d in exp_data:
+                cat[d["category"]]=cat.get(d["category"],0)+d["amount"]
+            fig,ax=plt.subplots()
+            ax.pie(cat.values(),labels=cat.keys(),autopct="%1.1f%%")
             st.pyplot(fig)
+            st.markdown('</div>', unsafe_allow_html=True)
 
-            top = max(cat_sum, key=cat_sum.get)
-            st.success(f"🔥 Top Category: {top} → ₹{cat_sum[top]}")
-
-        st.subheader("📈 Income vs Expense")
-
-        fig, ax = plt.subplots()
-        ax.bar(["Income", "Expense"], [income, expense])
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        fig,ax=plt.subplots()
+        ax.bar(["Income","Expense"],[income,expense])
         st.pyplot(fig)
+        st.markdown('</div>', unsafe_allow_html=True)
 
     else:
-        st.info("No transactions yet.")
+        st.info("No data yet")
 
 # ======================================================
 # ADD TRANSACTION
@@ -279,19 +248,23 @@ else:
 
     st.title("➕ Add Transaction")
 
-    t_type = st.selectbox("Type", ["Income", "Expense"])
-    category = st.selectbox("Category", ["Food","Travel","Bills","Shopping","Salary","Other"])
-    amount = st.number_input("Amount", min_value=0.0)
-    date = st.date_input("Date", value=datetime.date.today())
+    t = st.selectbox("Type",["Income","Expense"])
+    acc = st.selectbox("Account", st.session_state.accounts)
+    cat = st.selectbox("Category",["Food","Travel","Bills","Shopping","Salary","Other"])
+    amt = st.number_input("Amount",min_value=0.0)
+    date = st.date_input("Date",datetime.date.today())
 
     if st.button("Add"):
-
-        data.append({
-            "type": t_type,
-            "category": category,
-            "amount": amount,
-            "date": str(date)
-        })
-
-        save_data(data)
-        st.success("Transaction Added! 🎉")
+        if amt <= 0:
+            st.warning("Enter valid amount")
+        else:
+            data.append({
+                "type":t,
+                "account":acc,
+                "category":cat,
+                "amount":amt,
+                "date":str(date)
+            })
+            save_data(data)
+            st.success("Added 🎉")
+            st.rerun()
