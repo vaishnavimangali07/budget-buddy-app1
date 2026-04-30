@@ -1,14 +1,37 @@
 import streamlit as st
-import json
+import sqlite3
 import matplotlib.pyplot as plt
 import datetime
 import hashlib
 
-# ✅ TEST LINE (for deployment check)
-st.write("App updated 🚀")
+# ======================================================
+# DB SETUP
+# ======================================================
+conn = sqlite3.connect("budget.db", check_same_thread=False)
+c = conn.cursor()
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS users (
+    username TEXT PRIMARY KEY,
+    password TEXT
+)
+""")
+
+c.execute("""
+CREATE TABLE IF NOT EXISTS transactions (
+    username TEXT,
+    type TEXT,
+    account TEXT,
+    category TEXT,
+    amount REAL,
+    date TEXT
+)
+""")
+
+conn.commit()
 
 # ======================================================
-# PASSWORD HASH FUNCTION
+# PASSWORD HASH
 # ======================================================
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -18,8 +41,10 @@ def hash_password(password):
 # ======================================================
 st.set_page_config(page_title="Budget Buddy", layout="centered")
 
+st.write("App updated 🚀")
+
 # ======================================================
-# 🎨 UI
+# UI STYLE
 # ======================================================
 st.markdown("""
 <style>
@@ -42,24 +67,6 @@ body {background-color: #eef2ff;}
 }
 </style>
 """, unsafe_allow_html=True)
-
-# ======================================================
-# AUTH
-# ======================================================
-USERS_FILE = "users.json"
-
-def load_users():
-    try:
-        with open(USERS_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return {}
-
-def save_users(users):
-    with open(USERS_FILE, "w") as f:
-        json.dump(users, f)
-
-users = load_users()
 
 # ======================================================
 # SESSION STATE
@@ -102,7 +109,10 @@ if not st.session_state.logged_in:
         p = st.text_input("Password", type="password")
 
         if st.button("Login"):
-            if u in users and users[u] == hash_password(p):
+            c.execute("SELECT * FROM users WHERE username=? AND password=?", (u, hash_password(p)))
+            result = c.fetchone()
+
+            if result:
                 st.session_state.logged_in = True
                 st.session_state.user = u
                 st.rerun()
@@ -114,16 +124,17 @@ if not st.session_state.logged_in:
         p = st.text_input("New Password", type="password")
 
         if st.button("Sign Up"):
-            if u in users:
-                st.warning("User exists")
-            elif u == "" or p == "":
+            if u == "" or p == "":
                 st.warning("Fill all fields")
             else:
-                users[u] = hash_password(p)
-                save_users(users)
-                st.session_state.logged_in = True
-                st.session_state.user = u
-                st.rerun()
+                try:
+                    c.execute("INSERT INTO users VALUES (?, ?)", (u, hash_password(p)))
+                    conn.commit()
+                    st.session_state.logged_in = True
+                    st.session_state.user = u
+                    st.rerun()
+                except:
+                    st.warning("User already exists")
 
     st.stop()
 
@@ -139,22 +150,20 @@ if st.sidebar.button("🚪 Logout"):
 page = st.sidebar.selectbox("Navigate", ["Dashboard", "Add Transaction"])
 
 # ======================================================
-# DATA
+# LOAD DATA FROM DB
 # ======================================================
-DATA_FILE = f"data_{st.session_state.user}.json"
+c.execute("SELECT type, account, category, amount, date FROM transactions WHERE username=?", (st.session_state.user,))
+rows = c.fetchall()
 
-def load_data():
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except:
-        return []
-
-def save_data(data):
-    with open(DATA_FILE, "w") as f:
-        json.dump(data, f)
-
-data = load_data()
+data = []
+for r in rows:
+    data.append({
+        "type": r[0],
+        "account": r[1],
+        "category": r[2],
+        "amount": r[3],
+        "date": r[4]
+    })
 
 # ======================================================
 # DASHBOARD
@@ -258,13 +267,10 @@ else:
         if amt <= 0:
             st.warning("Enter valid amount")
         else:
-            data.append({
-                "type":t,
-                "account":acc,
-                "category":cat,
-                "amount":amt,
-                "date":str(date)
-            })
-            save_data(data)
+            c.execute(
+                "INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?)",
+                (st.session_state.user, t, acc, cat, amt, str(date))
+            )
+            conn.commit()
             st.success("Added 🎉")
             st.rerun()
