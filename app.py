@@ -3,7 +3,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 import datetime
 import hashlib
-import pandas as pd   # ✅ NEW
+import pandas as pd
 
 # ======================================================
 # DB SETUP
@@ -41,7 +41,6 @@ def hash_password(password):
 # PAGE CONFIG
 # ======================================================
 st.set_page_config(page_title="Budget Buddy", layout="centered")
-
 st.write("App updated 🚀")
 
 # ======================================================
@@ -151,19 +150,20 @@ if st.sidebar.button("🚪 Logout"):
 page = st.sidebar.selectbox("Navigate", ["Dashboard", "Add Transaction"])
 
 # ======================================================
-# LOAD DATA FROM DB
+# LOAD DATA (WITH ID FOR DELETE)
 # ======================================================
-c.execute("SELECT type, account, category, amount, date FROM transactions WHERE username=?", (st.session_state.user,))
+c.execute("SELECT rowid, type, account, category, amount, date FROM transactions WHERE username=?", (st.session_state.user,))
 rows = c.fetchall()
 
 data = []
 for r in rows:
     data.append({
-        "type": r[0],
-        "account": r[1],
-        "category": r[2],
-        "amount": r[3],
-        "date": r[4]
+        "id": r[0],
+        "type": r[1],
+        "account": r[2],
+        "category": r[3],
+        "amount": r[4],
+        "date": r[5]
     })
 
 # ======================================================
@@ -217,6 +217,7 @@ if page == "Dashboard":
 
         balance = sum(accounts.values())
 
+        # Metrics
         st.markdown('<div class="card">', unsafe_allow_html=True)
         c1,c2,c3 = st.columns(3)
         c1.metric("Income", income)
@@ -224,6 +225,7 @@ if page == "Dashboard":
         c3.metric("Balance", balance)
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # Accounts
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("🏦 Accounts")
         for a,b in accounts.items():
@@ -250,18 +252,28 @@ if page == "Dashboard":
         st.markdown('</div>', unsafe_allow_html=True)
 
         # ==============================
-        # ✅ TRANSACTION HISTORY (NEW)
+        # TRANSACTION HISTORY + DELETE
         # ==============================
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📄 Transactions History")
 
         for d in data:
-            st.write(f"{d['date']} | {d['type']} | {d['category']} | ₹{d['amount']}")
+            col1, col2 = st.columns([4,1])
+
+            with col1:
+                st.write(f"{d['date']} | {d['type']} | {d['category']} | ₹{d['amount']}")
+
+            with col2:
+                if st.button("❌", key=d["id"]):
+                    c.execute("DELETE FROM transactions WHERE rowid=?", (d["id"],))
+                    conn.commit()
+                    st.success("Deleted!")
+                    st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
 
         # ==============================
-        # ✅ DOWNLOAD REPORT (NEW)
+        # DOWNLOAD CSV
         # ==============================
         df = pd.DataFrame(data)
 
