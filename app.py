@@ -3,6 +3,7 @@ import sqlite3
 import matplotlib.pyplot as plt
 import datetime
 import hashlib
+import pandas as pd   # ✅ NEW
 
 # ======================================================
 # DB SETUP
@@ -229,6 +230,7 @@ if page == "Dashboard":
             st.write(f"{a}: ₹{b}")
         st.markdown('</div>', unsafe_allow_html=True)
 
+        # Charts
         exp_data=[d for d in data if d["type"]=="Expense"]
 
         if exp_data:
@@ -246,6 +248,29 @@ if page == "Dashboard":
         ax.bar(["Income","Expense"],[income,expense])
         st.pyplot(fig)
         st.markdown('</div>', unsafe_allow_html=True)
+
+        # ==============================
+        # ✅ TRANSACTION HISTORY (NEW)
+        # ==============================
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("📄 Transactions History")
+
+        for d in data:
+            st.write(f"{d['date']} | {d['type']} | {d['category']} | ₹{d['amount']}")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ==============================
+        # ✅ DOWNLOAD REPORT (NEW)
+        # ==============================
+        df = pd.DataFrame(data)
+
+        st.download_button(
+            label="📥 Download Report",
+            data=df.to_csv(index=False),
+            file_name="budget_report.csv",
+            mime="text/csv"
+        )
 
     else:
         st.info("No data yet")
