@@ -150,7 +150,7 @@ if st.sidebar.button("🚪 Logout"):
 page = st.sidebar.selectbox("Navigate", ["Dashboard", "Add Transaction"])
 
 # ======================================================
-# LOAD DATA (WITH ID FOR DELETE)
+# LOAD DATA
 # ======================================================
 c.execute("SELECT rowid, type, account, category, amount, date FROM transactions WHERE username=?", (st.session_state.user,))
 rows = c.fetchall()
@@ -178,33 +178,44 @@ if page == "Dashboard":
     </div>
     """, unsafe_allow_html=True)
 
-    if st.button("🏦 Add Account"):
-        st.session_state.show_account_form = True
+    # ==============================
+    # FILTER UI (NEW)
+    # ==============================
+    if data:
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("🔍 Filters")
 
-    if st.session_state.show_account_form:
-        st.subheader("➕ Add Account")
+        categories = ["All"] + list(set(d["category"] for d in data))
+        selected_category = st.selectbox("Category", categories)
 
-        bank = st.selectbox("Select Bank", BANK_LIST)
-        balance = st.number_input("Opening Balance", min_value=0.0)
+        start_date = st.date_input("Start Date", datetime.date.today())
+        end_date = st.date_input("End Date", datetime.date.today())
 
-        if st.button("Save Account"):
-            if bank not in st.session_state.accounts:
-                st.session_state.accounts.append(bank)
-                st.session_state.account_balances[bank] = balance
-                st.success(f"{bank} added with ₹{balance}")
-                st.session_state.show_account_form = False
-                st.rerun()
-            else:
-                st.warning("Already exists")
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # APPLY FILTER
+        filtered_data = []
+        for d in data:
+            d_date = datetime.datetime.strptime(d["date"], "%Y-%m-%d").date()
+
+            if selected_category != "All" and d["category"] != selected_category:
+                continue
+
+            if not (start_date <= d_date <= end_date):
+                continue
+
+            filtered_data.append(d)
+    else:
+        filtered_data = []
 
     if data:
 
-        income = sum(d["amount"] for d in data if d["type"]=="Income")
-        expense = sum(d["amount"] for d in data if d["type"]=="Expense")
+        income = sum(d["amount"] for d in filtered_data if d["type"]=="Income")
+        expense = sum(d["amount"] for d in filtered_data if d["type"]=="Expense")
 
         accounts = st.session_state.account_balances.copy()
 
-        for d in data:
+        for d in filtered_data:
             acc = d.get("account","Cash")
 
             if acc not in accounts:
@@ -225,39 +236,11 @@ if page == "Dashboard":
         c3.metric("Balance", balance)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Accounts
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("🏦 Accounts")
-        for a,b in accounts.items():
-            st.write(f"{a}: ₹{b}")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # Charts
-        exp_data=[d for d in data if d["type"]=="Expense"]
-
-        if exp_data:
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            cat={}
-            for d in exp_data:
-                cat[d["category"]]=cat.get(d["category"],0)+d["amount"]
-            fig,ax=plt.subplots()
-            ax.pie(cat.values(),labels=cat.keys(),autopct="%1.1f%%")
-            st.pyplot(fig)
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="card">', unsafe_allow_html=True)
-        fig,ax=plt.subplots()
-        ax.bar(["Income","Expense"],[income,expense])
-        st.pyplot(fig)
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        # ==============================
-        # TRANSACTION HISTORY + DELETE
-        # ==============================
+        # History + Delete (FILTERED)
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("📄 Transactions History")
 
-        for d in data:
+        for d in filtered_data:
             col1, col2 = st.columns([4,1])
 
             with col1:
@@ -272,17 +255,9 @@ if page == "Dashboard":
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # ==============================
-        # DOWNLOAD CSV
-        # ==============================
-        df = pd.DataFrame(data)
-
-        st.download_button(
-            label="📥 Download Report",
-            data=df.to_csv(index=False),
-            file_name="budget_report.csv",
-            mime="text/csv"
-        )
+        # Download
+        df = pd.DataFrame(filtered_data)
+        st.download_button("📥 Download Report", df.to_csv(index=False), "budget_report.csv")
 
     else:
         st.info("No data yet")
