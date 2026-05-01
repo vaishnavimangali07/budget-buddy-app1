@@ -6,7 +6,7 @@ import hashlib
 import pandas as pd
 
 # ======================================================
-# DB SETUP
+# DATABASE
 # ======================================================
 conn = sqlite3.connect("budget.db", check_same_thread=False)
 c = conn.cursor()
@@ -41,29 +41,40 @@ def hash_password(password):
 # PAGE CONFIG
 # ======================================================
 st.set_page_config(page_title="Budget Buddy", layout="centered")
+
 st.write("App updated 🚀")
 
 # ======================================================
-# UI STYLE
+# STYLE
 # ======================================================
 st.markdown("""
 <style>
 body {background-color: #eef2ff;}
 .block-container {max-width: 420px; margin: auto;}
 #MainMenu, footer, header {visibility: hidden;}
+
 .header {
     background: linear-gradient(135deg, #6d28d9, #2563eb);
-    padding: 20px; border-radius: 20px; color: white;
-    text-align: center; margin-bottom: 15px;
+    padding: 20px;
+    border-radius: 20px;
+    color: white;
+    text-align: center;
+    margin-bottom: 15px;
 }
+
 .card {
-    background: white; padding: 15px; border-radius: 18px;
+    background: white;
+    padding: 15px;
+    border-radius: 18px;
     box-shadow: 0 6px 20px rgba(0,0,0,0.08);
     margin-bottom: 15px;
 }
+
 .stButton button {
     background: linear-gradient(135deg, #2563eb, #4f46e5);
-    color: white; border-radius: 12px; width: 100%;
+    color: white;
+    border-radius: 12px;
+    width: 100%;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -75,26 +86,26 @@ if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user = None
 
-if "accounts" not in st.session_state:
-    st.session_state.accounts = ["Cash", "Wallet"]
-
-if "account_balances" not in st.session_state:
-    st.session_state.account_balances = {}
-
-if "show_account_form" not in st.session_state:
-    st.session_state.show_account_form = False
-
 # ======================================================
-# BANK LIST
+# BANK GROUPS (NEW IMPROVED VERSION)
 # ======================================================
-BANK_LIST = [
-    "SBI","HDFC","ICICI","Axis Bank",
-    "Kotak Bank","Canara Bank",
-    "Union Bank","Bank of Baroda",
-    "Punjab National Bank",
-    "IndusInd Bank",
-    "Paytm Wallet","PhonePe Wallet","Google Pay (GPay)"
-]
+BANK_OPTIONS = {
+    "💰 Cash": ["Cash"],
+
+    "🏦 Banks": [
+        "SBI Bank",
+        "HDFC Bank",
+        "ICICI Bank",
+        "Axis Bank",
+        "Kotak Bank"
+    ],
+
+    "📱 Wallets": [
+        "Paytm Wallet",
+        "PhonePe Wallet",
+        "Google Pay"
+    ]
+}
 
 # ======================================================
 # LOGIN / SIGNUP
@@ -152,7 +163,11 @@ page = st.sidebar.selectbox("Navigate", ["Dashboard", "Add Transaction"])
 # ======================================================
 # LOAD DATA
 # ======================================================
-c.execute("SELECT rowid, type, account, category, amount, date FROM transactions WHERE username=?", (st.session_state.user,))
+c.execute("""
+SELECT rowid, type, account, category, amount, date
+FROM transactions WHERE username=?
+""", (st.session_state.user,))
+
 rows = c.fetchall()
 
 data = []
@@ -178,9 +193,6 @@ if page == "Dashboard":
     </div>
     """, unsafe_allow_html=True)
 
-    # ==============================
-    # FILTER UI (NEW)
-    # ==============================
     if data:
         st.markdown('<div class="card">', unsafe_allow_html=True)
         st.subheader("🔍 Filters")
@@ -193,7 +205,6 @@ if page == "Dashboard":
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # APPLY FILTER
         filtered_data = []
         for d in data:
             d_date = datetime.datetime.strptime(d["date"], "%Y-%m-%d").date()
@@ -208,46 +219,75 @@ if page == "Dashboard":
     else:
         filtered_data = []
 
-    if data:
+    if filtered_data:
 
-        income = sum(d["amount"] for d in filtered_data if d["type"]=="Income")
-        expense = sum(d["amount"] for d in filtered_data if d["type"]=="Expense")
+        income = sum(d["amount"] for d in filtered_data if d["type"] == "Income")
+        expense = sum(d["amount"] for d in filtered_data if d["type"] == "Expense")
+        balance = income - expense
 
-        accounts = st.session_state.account_balances.copy()
-
-        for d in filtered_data:
-            acc = d.get("account","Cash")
-
-            if acc not in accounts:
-                accounts[acc] = 0
-
-            if d["type"]=="Income":
-                accounts[acc] += d["amount"]
-            else:
-                accounts[acc] -= d["amount"]
-
-        balance = sum(accounts.values())
-
-        # Metrics
+        # ================= METRICS =================
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        c1,c2,c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
         c1.metric("Income", income)
         c2.metric("Expense", expense)
         c3.metric("Balance", balance)
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # History + Delete (FILTERED)
+        # ================= PIE CHART =================
         st.markdown('<div class="card">', unsafe_allow_html=True)
-        st.subheader("📄 Transactions History")
+        st.subheader("📊 Income vs Expense")
+
+        if income == 0 and expense == 0:
+            st.info("No data yet")
+        else:
+            fig, ax = plt.subplots()
+            ax.pie(
+                [income, expense],
+                labels=["Income", "Expense"],
+                autopct="%1.1f%%",
+                colors=["#22c55e", "#ef4444"]
+            )
+            ax.set_title("Budget Overview")
+            st.pyplot(fig)
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ================= BAR CHART =================
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("📊 Category-wise Expenses")
+
+        category_expense = {}
 
         for d in filtered_data:
-            col1, col2 = st.columns([4,1])
+            if d["type"] == "Expense":
+                cat = d["category"]
+                category_expense[cat] = category_expense.get(cat, 0) + d["amount"]
+
+        if category_expense:
+            fig, ax = plt.subplots()
+            ax.bar(category_expense.keys(), category_expense.values(), color="#f97316")
+            plt.xticks(rotation=45)
+            ax.set_xlabel("Category")
+            ax.set_ylabel("Amount")
+            ax.set_title("Expenses by Category")
+            st.pyplot(fig)
+        else:
+            st.info("No expense data")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        # ================= HISTORY =================
+        st.markdown('<div class="card">', unsafe_allow_html=True)
+        st.subheader("📄 Transactions")
+
+        for d in filtered_data:
+            col1, col2 = st.columns([4, 1])
 
             with col1:
-                st.write(f"{d['date']} | {d['type']} | {d['category']} | ₹{d['amount']}")
+                st.write(f"{d['date']} | {d['account']} | {d['type']} | {d['category']} | ₹{d['amount']}")
 
             with col2:
-                if st.button("❌", key=d["id"]):
+                if st.button("🗑️", key=d["id"]):
                     c.execute("DELETE FROM transactions WHERE rowid=?", (d["id"],))
                     conn.commit()
                     st.success("Deleted!")
@@ -255,7 +295,6 @@ if page == "Dashboard":
 
         st.markdown('</div>', unsafe_allow_html=True)
 
-        # Download
         df = pd.DataFrame(filtered_data)
         st.download_button("📥 Download Report", df.to_csv(index=False), "budget_report.csv")
 
@@ -269,20 +308,24 @@ else:
 
     st.title("➕ Add Transaction")
 
-    t = st.selectbox("Type",["Income","Expense"])
-    acc = st.selectbox("Account", st.session_state.accounts)
-    cat = st.selectbox("Category",["Food","Travel","Bills","Shopping","Salary","Other"])
-    amt = st.number_input("Amount",min_value=0.0)
-    date = st.date_input("Date",datetime.date.today())
+    t = st.selectbox("Type", ["Income", "Expense"])
+
+    # ================= BANK GROUP SELECT =================
+    group = st.selectbox("Select Account Type", list(BANK_OPTIONS.keys()))
+    acc = st.selectbox("Select Account", BANK_OPTIONS[group])
+
+    cat = st.selectbox("Category", ["Food", "Travel", "Bills", "Shopping", "Salary", "Other"])
+    amt = st.number_input("Amount", min_value=0.0)
+    date = st.date_input("Date", datetime.date.today())
 
     if st.button("Add"):
         if amt <= 0:
             st.warning("Enter valid amount")
         else:
-            c.execute(
-                "INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?)",
-                (st.session_state.user, t, acc, cat, amt, str(date))
-            )
+            c.execute("""
+            INSERT INTO transactions VALUES (?, ?, ?, ?, ?, ?)
+            """, (st.session_state.user, t, acc, cat, amt, str(date)))
+
             conn.commit()
             st.success("Added 🎉")
             st.rerun()
